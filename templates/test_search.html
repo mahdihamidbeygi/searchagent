@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Search Agent Test Page</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      .search-container {
+        margin-bottom: 20px;
+      }
+      #searchInput {
+        width: 70%;
+        padding: 10px;
+        font-size: 16px;
+      }
+      button {
+        padding: 10px 20px;
+        font-size: 16px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        cursor: pointer;
+      }
+      .logout-btn {
+        background-color: #f44336;
+      }
+      .results {
+        margin-top: 20px;
+      }
+      .result-item {
+        border: 1px solid #ddd;
+        padding: 15px;
+        margin-bottom: 10px;
+        border-radius: 5px;
+      }
+      .answer {
+        background-color: #f8f9fa;
+        padding: 15px;
+        margin-top: 20px;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>Search Agent Test Page</h1>
+      <button class="logout-btn" onclick="window.location.href='/logout/'">
+        Logout
+      </button>
+    </div>
+
+    <div class="search-container">
+      <input
+        type="text"
+        id="searchInput"
+        placeholder="Enter your search query..."
+      />
+      <button onclick="performSearch()">Search</button>
+    </div>
+
+    <div id="results" class="results"></div>
+
+    <script>
+      async function performSearch() {
+        const query = document.getElementById("searchInput").value;
+        if (!query) return;
+
+        const resultsDiv = document.getElementById("results");
+        resultsDiv.innerHTML = "<p>Searching...</p>";
+
+        try {
+          const response = await fetch("/api/search/search/", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": getCookie("csrftoken"),
+            },
+            body: JSON.stringify({ query }),
+          });
+
+          if (response.status === 403) {
+            window.location.href = "/login/";
+            return;
+          }
+
+          if (!response.ok) {
+            throw new Error("Search failed");
+          }
+
+          const data = await response.json();
+          displayResults(data);
+        } catch (error) {
+          resultsDiv.innerHTML = `<p>Error: ${error.message}</p>`;
+        }
+      }
+
+      function displayResults(data) {
+        const resultsDiv = document.getElementById("results");
+        resultsDiv.innerHTML = "";
+
+        // Display the answer
+        if (data.answer) {
+          const answerDiv = document.createElement("div");
+          answerDiv.className = "answer";
+          answerDiv.innerHTML = `<h3>Answer:</h3><p>${data.answer}</p>`;
+          resultsDiv.appendChild(answerDiv);
+        }
+
+        // Display the results
+        if (data.results && data.results.length > 0) {
+          const resultsList = document.createElement("div");
+          resultsList.innerHTML = "<h3>Results:</h3>";
+
+          data.results.forEach((result) => {
+            const resultItem = document.createElement("div");
+            resultItem.className = "result-item";
+            resultItem.innerHTML = `
+                        <h4>${result.title || "Untitled"}</h4>
+                        <p>${result.content}</p>
+                        <p><small>Source: ${
+                          result.source || "Unknown"
+                        }</small></p>
+                        <p><small>Relevance: ${(
+                          result.relevance_score * 100
+                        ).toFixed(2)}%</small></p>
+                    `;
+            resultsList.appendChild(resultItem);
+          });
+
+          resultsDiv.appendChild(resultsList);
+        } else {
+          resultsDiv.innerHTML += "<p>No results found.</p>";
+        }
+      }
+
+      function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== "") {
+          const cookies = document.cookie.split(";");
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === name + "=") {
+              cookieValue = decodeURIComponent(
+                cookie.substring(name.length + 1)
+              );
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+    </script>
+  </body>
+</html>
