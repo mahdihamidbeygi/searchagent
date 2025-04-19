@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from core.ai.agentic_job_search import AgenticJobSearch
+from core.ai.agentic_job_search_google_base import AgenticJobSearch
 from core.ai.job_search import JobSearchAgent
 from core.ai.search import AISearch
 from core.models import JobListing, SearchFeedback, SearchQuery, SearchResult
@@ -38,11 +39,16 @@ def logout_view(request):
 def test_search(request):
     return render(request, 'test_search.html')
 
+
+@login_required
+def job_search(request):
+    return render(request, 'job_search.html')
+
 # Create your views here.
 
 class SearchViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
-    ai_search = AISearch()
+    search_agent = AgenticJobSearch()
     
     @action(detail=False, methods=['post'])
     def search(self, request):
@@ -51,9 +57,9 @@ class SearchViewSet(viewsets.ViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         query = serializer.validated_data['query']
-        
+
         # Process the query using AI
-        ai_response = self.ai_search.process_query(query)
+        ai_response = self.search_agent.process_query(query)
         
         if 'error' in ai_response:
             return Response(
@@ -112,84 +118,84 @@ class SearchViewSet(viewsets.ViewSet):
             status=status.HTTP_201_CREATED
         )
 
-class JobSearchViewSet(viewsets.ViewSet):
-    permission_classes = [IsAuthenticated]
-    job_search = JobSearchAgent()
+# class JobSearchViewSet(viewsets.ViewSet):
+#     permission_classes = [IsAuthenticated]
+#     job_search = JobSearchAgent()
     
-    @action(detail=False, methods=['post'])
-    def search(self, request):
-        serializer = SearchRequestSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+#     @action(detail=False, methods=['post'])
+#     def search(self, request):
+#         serializer = SearchRequestSerializer(data=request.data)
+#         if not serializer.is_valid():
+#             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-        query = serializer.validated_data['query']
-        location = request.data.get('location', '')
-        num_results = int(request.data.get('num_results', 10))
+#         query = serializer.validated_data['query']
+#         location = request.data.get('location', '')
+#         num_results = int(request.data.get('num_results', 10))
         
-        try:
-            # Search for jobs
-            job_listings = self.job_search.search_jobs(query, location, num_results)
+#         try:
+#             # Search for jobs
+#             job_listings = self.job_search.search_jobs(query, location, num_results)
             
-            # Save results to database
-            saved_listings = []
-            for listing in job_listings:
-                job = JobListing.objects.create(
-                    user=request.user,
-                    title=listing.title,
-                    company=listing.company,
-                    location=listing.location,
-                    description=listing.description,
-                    url=listing.url,
-                    source=listing.source,
-                    posted_date=listing.posted_date,
-                    salary=listing.salary,
-                    job_type=listing.job_type,
-                    requirements=listing.requirements,
-                    benefits=listing.benefits,
-                    skills=listing.skills,
-                    relevance_score=listing.relevance_score
-                )
-                saved_listings.append(job)
+#             # Save results to database
+#             saved_listings = []
+#             for listing in job_listings:
+#                 job = JobListing.objects.create(
+#                     user=request.user,
+#                     title=listing.title,
+#                     company=listing.company,
+#                     location=listing.location,
+#                     description=listing.description,
+#                     url=listing.url,
+#                     source=listing.source,
+#                     posted_date=listing.posted_date,
+#                     salary=listing.salary,
+#                     job_type=listing.job_type,
+#                     requirements=listing.requirements,
+#                     benefits=listing.benefits,
+#                     skills=listing.skills,
+#                     relevance_score=listing.relevance_score
+#                 )
+#                 saved_listings.append(job)
             
-            # Return the response
-            return Response({
-                'query': query,
-                'location': location,
-                'results': [{
-                    'id': job.id,
-                    'title': job.title,
-                    'company': job.company,
-                    'location': job.location,
-                    'description': job.description,
-                    'url': job.url,
-                    'source': job.source,
-                    'posted_date': job.posted_date,
-                    'salary': job.salary,
-                    'job_type': job.job_type,
-                    'requirements': job.requirements,
-                    'benefits': job.benefits,
-                    'skills': job.skills,
-                    'relevance_score': job.relevance_score
-                } for job in saved_listings]
-            })
+#             # Return the response
+#             return Response({
+#                 'query': query,
+#                 'location': location,
+#                 'results': [{
+#                     'id': job.id,
+#                     'title': job.title,
+#                     'company': job.company,
+#                     'location': job.location,
+#                     'description': job.description,
+#                     'url': job.url,
+#                     'source': job.source,
+#                     'posted_date': job.posted_date,
+#                     'salary': job.salary,
+#                     'job_type': job.job_type,
+#                     'requirements': job.requirements,
+#                     'benefits': job.benefits,
+#                     'skills': job.skills,
+#                     'relevance_score': job.relevance_score
+#                 } for job in saved_listings]
+#             })
             
-        except Exception as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+#         except Exception as e:
+#             return Response(
+#                 {'error': str(e)},
+#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+#             )
     
-    @action(detail=False, methods=['get'])
-    def history(self, request):
-        listings = JobListing.objects.filter(user=request.user)
-        return Response([{
-            'id': job.id,
-            'title': job.title,
-            'company': job.company,
-            'location': job.location,
-            'posted_date': job.posted_date,
-            'relevance_score': job.relevance_score
-        } for job in listings])
+#     @action(detail=False, methods=['get'])
+#     def history(self, request):
+#         listings = JobListing.objects.filter(user=request.user)
+#         return Response([{
+#             'id': job.id,
+#             'title': job.title,
+#             'company': job.company,
+#             'location': job.location,
+#             'posted_date': job.posted_date,
+#             'relevance_score': job.relevance_score
+#         } for job in listings])
 
 class AgenticJobSearchViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
@@ -202,74 +208,25 @@ class AgenticJobSearchViewSet(viewsets.ViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         query = serializer.validated_data['query']
+        industry = request.data.get('industry', None)
         
         try:
-            # Process the query using agentic job search
-            ai_response = self.agentic_job_search.process_query(query)
+            # Search for jobs using the new agentic job search system
+            result = self.agentic_job_search.process_query(query, industry)
             
-            if 'error' in ai_response:
-                return Response(
-                    {'error': ai_response['error']},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-            
-            # Save results to database
-            saved_listings = []
-            for result in ai_response['results']:
-                # Extract job info from search result
-                title = result.get('title', 'Unknown Position')
-                description = result.get('description', '')
-                url = result.get('url', '')
-                source = result.get('source', 'Unknown')
-                
-                # Extract more specific job info when available
-                company = ''
-                location = ''
-                job_type = ''
-                
-                # Try to parse company and location from title or description
-                if ':' in title:
-                    parts = title.split(':', 1)
-                    title = parts[0].strip()
-                    company = parts[1].strip()
-                
-                if '-' in title and not company:
-                    parts = title.split('-', 1)
-                    title = parts[0].strip()
-                    company = parts[1].strip()
-                
-                # Create job listing in database
-                job = JobListing.objects.create(
-                    user=request.user,
-                    title=title,
-                    company=company,
-                    location=location,
-                    description=description,
-                    url=url,
-                    source=source,
-                    posted_date=timezone.now(),
-                    job_type=job_type,
-                    relevance_score=0.8  # Default score
-                )
-                saved_listings.append(job)
+            # Save job listings to the database
+            job_listings = self.agentic_job_search.save_job_listings(
+                request.user.id, 
+                result.get('results', [])
+            )
             
             # Return the response
             return Response({
                 'query': query,
-                'structured_query': ai_response.get('structured_query', {}),
-                'answer': ai_response['answer'],
-                'results': [{
-                    'id': job.id,
-                    'title': job.title,
-                    'company': job.company,
-                    'location': job.location,
-                    'description': job.description,
-                    'url': job.url,
-                    'source': job.source,
-                    'posted_date': job.posted_date,
-                    'job_type': job.job_type,
-                    'relevance_score': job.relevance_score
-                } for job in saved_listings]
+                'industry': industry,
+                'answer': result.get('answer', ''),
+                'results': result.get('results', []),
+                'errors': result.get('errors', [])
             })
             
         except Exception as e:
@@ -289,3 +246,23 @@ class AgenticJobSearchViewSet(viewsets.ViewSet):
             'posted_date': job.posted_date,
             'relevance_score': job.relevance_score
         } for job in listings])
+    
+    @action(detail=True, methods=['get'])
+    def detail(self, request, pk=None):
+        job = get_object_or_404(JobListing, pk=pk, user=request.user)
+        return Response({
+            'id': job.id,
+            'title': job.title,
+            'company': job.company,
+            'location': job.location,
+            'description': job.description,
+            'url': job.url,
+            'source': job.source,
+            'posted_date': job.posted_date,
+            'salary': job.salary,
+            'job_type': job.job_type,
+            'requirements': job.requirements,
+            'benefits': job.benefits,
+            'skills': job.skills,
+            'relevance_score': job.relevance_score
+        })

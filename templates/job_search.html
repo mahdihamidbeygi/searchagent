@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agentic Job Search</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      .job-listing {
+        border: 1px solid #eee;
+        padding: 15px;
+        margin-bottom: 15px;
+        border-radius: 5px;
+      }
+      .job-listing:hover {
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      .skills-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+      }
+      .skill-badge {
+        background-color: #e9ecef;
+        padding: 5px 10px;
+        border-radius: 15px;
+        font-size: 0.8rem;
+      }
+      .loader {
+        border: 5px solid #f3f3f3;
+        border-top: 5px solid #3498db;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 2s linear infinite;
+        margin: 20px auto;
+        display: none;
+      }
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container py-5">
+      <h1 class="mb-4">Agentic Job Search</h1>
+
+      <div class="card mb-4">
+        <div class="card-body">
+          <form id="job-search-form">
+            <div class="mb-3">
+              <label for="query" class="form-label">Job Search Query</label>
+              <input
+                type="text"
+                class="form-control"
+                id="query"
+                name="query"
+                placeholder="e.g. Python Developer"
+                required
+              />
+            </div>
+            <div class="mb-3">
+              <label for="industry" class="form-label"
+                >Industry (Optional)</label
+              >
+              <select class="form-select" id="industry" name="industry">
+                <option value="">Select Industry (Optional)</option>
+                <option value="technology">Technology</option>
+                <option value="finance">Finance</option>
+                <option value="healthcare">Healthcare</option>
+                <option value="retail">Retail</option>
+              </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Search Jobs</button>
+          </form>
+        </div>
+      </div>
+
+      <div id="loader" class="loader"></div>
+
+      <div id="search-results" class="mt-4" style="display: none">
+        <div class="alert alert-info" id="search-summary"></div>
+
+        <div id="job-listings"></div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      document
+        .getElementById("job-search-form")
+        .addEventListener("submit", function (e) {
+          e.preventDefault();
+
+          const query = document.getElementById("query").value;
+          const industry = document.getElementById("industry").value;
+
+          // Show loader
+          document.getElementById("loader").style.display = "block";
+          document.getElementById("search-results").style.display = "none";
+
+          // Send request to the API
+          fetch("/api/jobs/search/", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": getCookie("csrftoken"),
+            },
+            body: JSON.stringify({
+              query: query,
+              industry: industry,
+            }),
+          })
+            .then((response) => {
+              if (!response.ok) {
+                throw new Error("Network response was not ok");
+              }
+              return response.json();
+            })
+            .then((data) => {
+              // Hide loader
+              document.getElementById("loader").style.display = "none";
+              document.getElementById("search-results").style.display = "block";
+
+              // Display the search summary
+              document.getElementById("search-summary").textContent =
+                data.answer;
+
+              // Display job listings
+              const jobListingsContainer =
+                document.getElementById("job-listings");
+              jobListingsContainer.innerHTML = "";
+
+              if (data.results && data.results.length > 0) {
+                data.results.forEach((job) => {
+                  const jobElement = document.createElement("div");
+                  jobElement.className = "job-listing";
+
+                  let skillsHtml = "";
+                  if (job.skills && job.skills.length > 0) {
+                    skillsHtml = '<div class="skills-list mt-2">';
+                    job.skills.forEach((skill) => {
+                      skillsHtml += `<span class="skill-badge">${skill}</span>`;
+                    });
+                    skillsHtml += "</div>";
+                  }
+
+                  jobElement.innerHTML = `
+                            <h3>${job.title}</h3>
+                            <h5>${job.company} - ${job.location}</h5>
+                            <p><strong>Job Type:</strong> ${
+                              job.job_type
+                            } | <strong>Salary:</strong> ${job.salary}</p>
+                            <p class="text-muted">Posted: ${
+                              job.posted_date || "N/A"
+                            } | Source: ${job.source}</p>
+                            <p>${job.description.substring(0, 200)}${
+                    job.description.length > 200 ? "..." : ""
+                  }</p>
+                            ${skillsHtml}
+                            <div class="mt-3">
+                                <a href="${
+                                  job.url
+                                }" target="_blank" class="btn btn-sm btn-outline-primary">View Job</a>
+                            </div>
+                        `;
+
+                  jobListingsContainer.appendChild(jobElement);
+                });
+              } else {
+                jobListingsContainer.innerHTML =
+                  '<div class="alert alert-warning">No job listings found matching your criteria.</div>';
+              }
+            })
+            .catch((error) => {
+              console.error("Error:", error);
+              document.getElementById("loader").style.display = "none";
+              document.getElementById("search-results").style.display = "block";
+              document.getElementById("search-summary").textContent =
+                "An error occurred while searching for jobs.";
+              document.getElementById("job-listings").innerHTML =
+                '<div class="alert alert-danger">Failed to load job listings. Please try again later.</div>';
+            });
+        });
+
+      // Function to get CSRF token from cookies
+      function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== "") {
+          const cookies = document.cookie.split(";");
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === name + "=") {
+              cookieValue = decodeURIComponent(
+                cookie.substring(name.length + 1)
+              );
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+    </script>
+  </body>
+</html>

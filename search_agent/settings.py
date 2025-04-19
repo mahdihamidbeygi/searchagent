@@ -215,3 +215,6 @@ LOGGING = {
         },
     },
 }
+
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+GROK_API_KEY = os.getenv('GROK_API_KEY')

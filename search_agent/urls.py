@@ -19,7 +19,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
-from api.views import login_view, logout_view, test_search
+from api.views import job_search, login_view, logout_view, test_search
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -27,4 +27,5 @@ urlpatterns = [
     path('login/', login_view, name='login'),
     path('logout/', logout_view, name='logout'),
     path('', test_search, name='test_search'),
+    path('jobs/', job_search, name='job_search'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

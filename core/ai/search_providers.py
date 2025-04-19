@@ -30,7 +30,7 @@ class BraveSearchProvider(SearchProvider):
     """Search provider using Brave Search API"""
     
     def __init__(self):
-        self.api_key = os.getenv("BRAVE_API_KEY")
+        self.api_key = os.getenv("BRAVE_WEBSEARCH_API_KEY")
         if not self.api_key:
             logger.warning("BRAVE_API_KEY not found in environment. Some features may be limited.")
         
