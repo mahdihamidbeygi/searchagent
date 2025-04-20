@@ -36,7 +36,7 @@ class AgenticJobSearch:
             logger.info(f"Processing job search query: {query}")
             
             # Run the agent workflow
-            result = self.workflow.run(query, industry)
+            result = self.workflow.run(search_query=query, location=industry or "", company_name=None)
             
             # Format the result for the API response
             formatted_result = self._format_result(result, query)

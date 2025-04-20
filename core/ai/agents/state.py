@@ -42,6 +42,7 @@ class JobSearchState(BaseModel):
     company_jobs: List[RawJobData] = Field(default_factory=list)
     listing_jobs: List[RawJobData] = Field(default_factory=list)
     news_jobs: List[RawJobData] = Field(default_factory=list)
+    search_engine_jobs: List[RawJobData] = Field(default_factory=list)
     
     # Extractor agent results
     standardized_jobs: List[JobRecord] = Field(default_factory=list)
@@ -51,4 +52,4 @@ class JobSearchState(BaseModel):
     
     def get_all_raw_jobs(self) -> List[RawJobData]:
         """Get all raw job data from all collector agents"""
-        return self.company_jobs + self.listing_jobs + self.news_jobs 
+        return self.company_jobs + self.listing_jobs + self.news_jobs + self.search_engine_jobs 

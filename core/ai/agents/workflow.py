@@ -1,13 +1,13 @@
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from langgraph.graph import END, StateGraph
 
-from core.ai.agents.browser_agent import BrowserAgent
 from core.ai.agents.company_collector import CompanyWebsiteCollector
 from core.ai.agents.extractor_agent import ExtractorAgent
 from core.ai.agents.job_listing_collector import JobListingWebsiteCollector
 from core.ai.agents.news_collector import NewsAndAdsCollector
+from core.ai.agents.search_engine_job_agent import SearchEngineJobAgent
 from core.ai.agents.state import JobSearchState
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ class JobSearchWorkflow:
         self.company_collector = CompanyWebsiteCollector()
         self.job_listing_collector = JobListingWebsiteCollector()
         self.news_collector = NewsAndAdsCollector()
-        self.browser_agent = BrowserAgent()
+        self.search_engine_agent = SearchEngineJobAgent()
         self.extractor_agent = ExtractorAgent()
         
         # Build the workflow graph
@@ -48,7 +48,7 @@ class JobSearchWorkflow:
         graph.add_node("company_collector", self.company_collector.process)
         graph.add_node("job_listing_collector", self.job_listing_collector.process)
         graph.add_node("news_collector", self.news_collector.process)
-        # graph.add_node("browser_agent", self.browser_agent.process)
+        graph.add_node("search_engine_agent", self.search_engine_agent.process)
         graph.add_node("extractor", self.extractor_agent.process)
         
         # Define the edges (parallel execution for collectors)
@@ -56,15 +56,15 @@ class JobSearchWorkflow:
         graph.add_edge("__start__", "company_collector")
         graph.add_edge("__start__", "job_listing_collector")
         graph.add_edge("__start__", "news_collector")
-        # graph.add_edge("__start__", "browser_agent")
+        graph.add_edge("__start__", "search_engine_agent")
         
         # All collectors -> Extractor (using conditional routing to wait for all collectors)
         graph.add_conditional_edges(
             "company_collector",
             self._check_all_collectors_done,
             {
-                True: "extractor",
-                False: "company_collector_wait"  # Wait for other collectors
+                "end": "extractor",
+                "continue": "company_collector_wait"  # Wait for other collectors
             }
         )
         graph.add_node("company_collector_wait", lambda x: x)
@@ -73,8 +73,8 @@ class JobSearchWorkflow:
             "job_listing_collector",
             self._check_all_collectors_done,
             {
-                True: "extractor",
-                False: "job_listing_collector_wait"  # Wait for other collectors
+                "end": "extractor",
+                "continue": "job_listing_collector_wait"  # Wait for other collectors
             }
         )
         graph.add_node("job_listing_collector_wait", lambda x: x)
@@ -83,66 +83,78 @@ class JobSearchWorkflow:
             "news_collector",
             self._check_all_collectors_done,
             {
-                True: "extractor",
-                False: "news_collector_wait"  # Wait for other collectors
+                "end": "extractor",
+                "continue": "news_collector_wait"  # Wait for other collectors
             }
         )
         graph.add_node("news_collector_wait", lambda x: x)
         
         graph.add_conditional_edges(
-            "browser_agent",
+            "search_engine_agent",
             self._check_all_collectors_done,
             {
-                True: "extractor",
-                False: "browser_agent_wait"  # Wait for other collectors
+                "end": "extractor",
+                "continue": "search_engine_agent_wait"  # Wait for other collectors
             }
         )
-        graph.add_node("browser_agent_wait", lambda x: x)
+        graph.add_node("search_engine_agent_wait", lambda x: x)
         
         # Extractor -> End
         graph.add_edge("extractor", END)
         
         return graph
     
-    def _check_all_collectors_done(self, state: JobSearchState) -> bool:
+    def _check_all_collectors_done(self, search_state: JobSearchState) -> str:
         """
-        Check if all collectors have completed their work
+        Check if all job collectors have completed their tasks.
         
         Args:
-            state: Current state of the workflow
+            search_state: The current job search state.
             
         Returns:
-            bool: True if all collectors are done, False otherwise
+            "continue" if any collectors still need to run, "end" otherwise.
         """
-        # Check if all collectors have completed
-        collectors_done = (
-            hasattr(state, 'company_jobs') and
-            hasattr(state, 'job_listing_jobs') and
-            hasattr(state, 'news_jobs') and
-            hasattr(state, 'browser_jobs')
+        # Check if search engine jobs have been collected
+        if not search_state.search_engine_jobs:
+            return "continue"
+            
+        # Check if company jobs need to be collected and have been
+        if search_state.company_name and not search_state.company_jobs:
+            return "continue"
+            
+        # Check if news jobs have been collected
+        if not search_state.news_jobs:
+            return "continue"
+            
+        # All collectors have run
+        return "end"
+    
+    async def run(self, search_query: str, location: str, company_name: Optional[str] = None) -> JobSearchState:
+        """
+        Run the job search workflow.
+        
+        Args:
+            search_query: The job search query.
+            location: The job location.
+            company_name: Optional company name to search for.
+            
+        Returns:
+            The final state after the workflow completes.
+        """
+        search_state = JobSearchState(
+            search_query=search_query,
+            location=location,
+            company_name=company_name,
+            job_types=[],
+            experience_levels=[],
+            preferred_companies=[],
+            skills=[],
+            excluded_skills=[],
+            company_jobs=[],
+            listing_jobs=[],
+            news_jobs=[],
+            search_engine_jobs=[]
         )
         
-        return collectors_done
-    
-    async def run(self, initial_state: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Run the job search workflow
-        
-        Args:
-            initial_state: Initial state for the workflow
-            
-        Returns:
-            Final state after workflow completion
-        """
-        try:
-            # Convert initial state to JobSearchState
-            search_state = JobSearchState(**initial_state)
-            
-            # Run the workflow
-            final_state = await self.workflow.invoke(search_state)
-            
-            return final_state
-            
-        except Exception as e:
-            logger.error(f"Error running job search workflow: {str(e)}")
-            return {"error": str(e)} 
+        await self.workflow.invoke(search_state)
+        return search_state 
