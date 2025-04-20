@@ -358,4 +358,91 @@ This tool is designed for legitimate testing and automation purposes. Always:
 
 ## License
 
-This project is for educational purposes only. Use responsibly. 
+This project is for educational purposes only. Use responsibly.
+
+# Search Agent - News Collector
+
+This component searches news sources for job opportunities related to a user's search query.
+
+## News Data Collection
+
+The `NewsAndAdsCollector` agent fetches job-related news from top tech news sources using the News API service.
+
+### Setup
+
+1. Sign up for a free API key at [NewsAPI.org](https://newsapi.org/)
+
+2. Configure your API key using one of these methods:
+
+   **Method 1: Environment Variable**
+   ```bash
+   # Windows (PowerShell)
+   $env:NEWS_API_KEY="your-api-key-here"
+
+   # Windows (Command Prompt)
+   set NEWS_API_KEY=your-api-key-here
+
+   # Linux/macOS
+   export NEWS_API_KEY="your-api-key-here"
+   ```
+
+   **Method 2: Configuration File**
+   
+   Create a file named `api_keys.json` in one of these locations:
+   - The project root directory
+   - A `config` directory in the project root
+   - In your home directory at `~/.searchagent/api_keys.json`
+
+   ```json
+   {
+       "news_api_key": "your-api-key-here"
+   }
+   ```
+
+   You can use the provided `api_keys.json.template` as a starting point:
+   ```bash
+   cp api_keys.json.template api_keys.json
+   # Then edit api_keys.json with your API key
+   ```
+
+### Features
+
+- Fetches job-related news from major tech publications
+- Filters articles to identify those mentioning job opportunities
+- Extracts company information from article content
+- Falls back to simulated data when the API is unavailable
+- Formats job data consistently with other collectors in the system
+
+### Supported News Sources
+
+- TechCrunch
+- Business Insider
+- Forbes
+- CNBC
+- The Verge
+
+## Usage
+
+The news collector is used as part of the job search pipeline. When invoked, it searches each configured news source for articles mentioning job opportunities related to the user's query.
+
+Example:
+
+```python
+from core.ai.agents.news_collector import NewsAndAdsCollector
+
+# Initialize the agent (optionally with a custom config file path)
+collector = NewsAndAdsCollector(config_path="path/to/custom/config.json")
+
+# Process a search query
+results = collector.process({
+    "query": "software engineer",
+    "industry": "tech"
+})
+
+# Access the collected job data
+news_jobs = results["news_jobs"]
+```
+
+## Development
+
+If you don't provide a NEWS_API_KEY, the agent will fall back to using simulated data for development purposes. 

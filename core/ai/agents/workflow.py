@@ -139,7 +139,7 @@ class JobSearchWorkflow:
             search_state = JobSearchState(**initial_state)
             
             # Run the workflow
-            final_state = await self.workflow.run(search_state)
+            final_state = await self.workflow.invoke(search_state)
             
             return final_state
             
