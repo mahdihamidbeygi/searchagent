@@ -1,8 +1,6 @@
 import logging
-import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
-from langchain_core.pydantic_v1 import BaseModel
 from langgraph.graph import END, StateGraph
 
 from core.ai.agents.browser_agent import BrowserAgent
@@ -50,7 +48,7 @@ class JobSearchWorkflow:
         graph.add_node("company_collector", self.company_collector.process)
         graph.add_node("job_listing_collector", self.job_listing_collector.process)
         graph.add_node("news_collector", self.news_collector.process)
-        graph.add_node("browser_agent", self.browser_agent.process)
+        # graph.add_node("browser_agent", self.browser_agent.process)
         graph.add_node("extractor", self.extractor_agent.process)
         
         # Define the edges (parallel execution for collectors)
@@ -58,7 +56,7 @@ class JobSearchWorkflow:
         graph.add_edge("__start__", "company_collector")
         graph.add_edge("__start__", "job_listing_collector")
         graph.add_edge("__start__", "news_collector")
-        graph.add_edge("__start__", "browser_agent")
+        # graph.add_edge("__start__", "browser_agent")
         
         # All collectors -> Extractor (using conditional routing to wait for all collectors)
         graph.add_conditional_edges(
@@ -141,7 +139,7 @@ class JobSearchWorkflow:
             search_state = JobSearchState(**initial_state)
             
             # Run the workflow
-            final_state = await self.workflow.arun(search_state)
+            final_state = await self.workflow.run(search_state)
             
             return final_state
             

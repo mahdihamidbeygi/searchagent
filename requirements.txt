@@ -17,7 +17,7 @@ sentence-transformers>=2.2.0
 # Browser automation
 browser-use>=0.1.0
 playwright>=1.40.0
-langchain-openai>=0.0.2
+langchain-openai>=0.0.3
 
 # Development dependencies
 pytest>=7.0.0
@@ -25,4 +25,20 @@ pytest-asyncio>=0.21.0
 black>=23.0.0
 isort>=5.12.0
 flake8>=6.0.0
-mypy>=1.0.0 
+mypy>=1.0.0
+
+# LinkedIn dependencies
+selenium>=4.11.0
+aiohttp>=3.8.4
+urllib3>=1.26.15
+tqdm>=4.65.0
+
+# Cloudflare bypass tools
+selenium-stealth>=1.0.6
+undetected-chromedriver>=3.5.4
+fake-useragent>=1.4.0
+selenium>=4.18.0
+
+# Web processing tools
+beautifulsoup4>=4.12.2
+requests>=2.31.0 

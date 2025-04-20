@@ -649,163 +649,161 @@ class CompanyWebsiteCollector(BaseAgent):
             
         Returns:
             List of raw job data found on the company website
+            
+        **TODO**:
+        check if there are any jobs on the company website
+        if not, look for a jobs page on the given url (sometimes there's a button on career page to go to jobs page)
+        **NOTE**:
+        this whole function and class can be replaced by Langchain/Langgraph based AI
         """
         logger.info(f"Searching {company['name']} careers page at {company['url']}")
         
-        # try:
-        # Make request to the company careers page
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
-        response = requests.get(company["url"], headers=headers, timeout=15)
-        
-        if response.status_code != 200:
-            logger.warning(f"Failed to fetch {company['name']} careers page: HTTP {response.status_code}")
-            return []
-        
-        # Parse the HTML content
-        soup = BeautifulSoup(response.content, "html.parser")
-        
-        # Extract all links
-        all_links = self._extract_links(soup, company["url"])
-        
-        # Extract job-specific links
-        job_links = self._extract_job_links(soup, company["url"])
-        
-        # Combine and deduplicate links
-        unique_links = list(set(all_links + job_links))
-        
-        # Extract relevant text content
-        content_text = self._extract_text_from_containers(soup)
-        content_text = self._clean_text(content_text)        
-        
-        # Normalize query for matching
-        query_terms = set(query.lower().split())
-        
-        # Use Gemini to extract job listings
-        prompt = f"""Extract job listings from {company['name']}'s careers page.
-        Focus on jobs related to: {query_terms}
-        
-        I've extracted the following information:
-        
-        Job-related links found:
-        {unique_links}
-        
-        Main content text:
-        {content_text}
-        
-        For each job listing, extract:
-        1. Job title (should be concise, 3-50 characters)
-        2. Job URL (must be one of the links provided above)
-        3. Location (if mentioned)
-        4. Job type (full-time, part-time, contract, etc.)
-        5. Description (concise, 10-200 characters)
-        6. Posted date (if available)
-        
-        Format the response as a JSON array with this structure:
-        [
-            {{
-                "title": "Job Title",
-                "url": "https://company.com/job-url",
-                "location": "Location",
-                "job_type": "Job Type",
-                "description": "Job Description",
-                "posted_date": "Posted Date"
-            }}
-        ]
-        
-        Important rules:
-        1. Only include jobs that match the query: {query_terms}
-        2. URLs must be from the provided links list
-        3. Keep titles and descriptions concise
-        4. Return ONLY the JSON array with no additional text.
-        """
-        
-        # Configure Gemini for extraction
-        config = types.GenerateContentConfig(
-            temperature=0.0,
-            top_p=0.95,
-            max_output_tokens=8192,
-            response_mime_type="application/json",
-        )
-        
-        # Generate content with Gemini
-        response = self.genai_client.models.generate_content(
-            model='gemini-2.0-flash',
-            contents=prompt,
-            config=config
-        )
-        
-        logger.warning(f"HTML Content: {unique_links}")
-        logger.warning(f"Gemini response: {response.text}")
-        # Extract JSON from response
-        # try:
-        if hasattr(response, 'text'):
-            # Get response text
-            raw_text = response.text
+        try:
+            # Make request to the company careers page
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            }
+            response = requests.get(company["url"], headers=headers, timeout=15)
             
-            # Extract JSON from the response text
-            json_match = re.search(r'```(?:json)?\s*(\[[\s\S]*?\])\s*```', raw_text)
-            if json_match:
-                json_str = json_match.group(1)
-            else:
-                # Try to find JSON array directly
-                json_pattern = r'(\[\s*\{[\s\S]*?\}\s*\])'
-                direct_match = re.search(json_pattern, raw_text)
-                if direct_match:
-                    json_str = direct_match.group(1)
+            if response.status_code != 200:
+                logger.warning(f"Failed to fetch {company['name']} careers page: HTTP {response.status_code}")
+                return []
+            
+            # Parse the HTML content
+            soup = BeautifulSoup(response.content, "html.parser")
+            
+            # Extract all links
+            all_links = self._extract_links(soup, company["url"])
+            
+            # Extract job-specific links
+            job_links = self._extract_job_links(soup, company["url"])
+            
+            # Combine and deduplicate links
+            unique_links = list(set(all_links + job_links))
+            
+            # Extract relevant text content
+            content_text = self._extract_text_from_containers(soup)
+            content_text = self._clean_text(content_text)        
+            
+            # Normalize query for matching
+            query_terms = set(query.lower().split())
+            
+            # Use Gemini to extract job listings
+            prompt = f"""Extract job listings from {company['name']}'s careers page.
+            Focus on jobs related to: {query_terms}
+            
+            I've extracted the following information:
+            
+            Job-related links found:
+            {unique_links}
+            
+            Main content text:
+            {content_text}
+            
+            For each job listing, extract:
+            1. Job title (should be concise, 3-50 characters)
+            2. Job URL (must be one of the links provided above)
+            3. Location (if mentioned)
+            4. Job type (full-time, part-time, contract, etc.)
+            5. Description (concise, 10-200 characters)
+            6. Posted date (if available)
+            
+            Format the response as a JSON array with this structure:
+            [
+                {{
+                    "title": "Job Title",
+                    "url": "https://company.com/job-url",
+                    "location": "Location",
+                    "job_type": "Job Type",
+                    "description": "Job Description",
+                    "posted_date": "Posted Date"
+                }}
+            ]
+            
+            Important rules:
+            1. Only include jobs that match the query: {query_terms}
+            2. URLs must be from the provided links list
+            3. Keep titles and descriptions concise
+            4. Return ONLY the JSON array with no additional text.
+            """
+            
+            # Configure Gemini for extraction
+            config = types.GenerateContentConfig(
+                temperature=0.0,
+                top_p=0.95,
+                max_output_tokens=8192,
+                response_mime_type="application/json",
+            )
+            
+            # Generate content with Gemini
+            response = self.genai_client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=prompt,
+                config=config
+            )
+            
+
+            # Extract JSON from response
+            try:
+                if hasattr(response, 'text'):
+                    # Get response text
+                    raw_text = response.text
+                    
+                    # Extract JSON from the response text
+                    json_match = re.search(r'```(?:json)?\s*(\[[\s\S]*?\])\s*```', raw_text)
+                    if json_match:
+                        json_str = json_match.group(1)
+                    else:
+                        # Try to find JSON array directly
+                        json_pattern = r'(\[\s*\{[\s\S]*?\}\s*\])'
+                        direct_match = re.search(json_pattern, raw_text)
+                        if direct_match:
+                            json_str = direct_match.group(1)
+                        else:
+                            # Use the entire response as potential JSON
+                            json_str = raw_text
+                    
+                    # Parse the extracted JSON
+                    extracted_jobs = json.loads(json_str)
+                    logger.warning(f"Gemini extracted {len(extracted_jobs)} jobs from {company['name']}")
+                    
+                    # Process extracted jobs
+                    jobs = []
+                    for job_data in extracted_jobs:
+                        try:
+                            # Make URL absolute if it's relative
+                            job_url = job_data.get("url", "")
+                            if job_url and not job_url.startswith("http"):
+                                continue
+                                                
+                            jobs.append(RawJobData(
+                                title=job_data.get("title", ""),
+                                company=company["name"],
+                                url=job_url,
+                                source=company["name"],
+                                location=job_data.get("location", "Unknown"),
+                                job_type=job_data.get("job_type", ""),
+                                description=job_data.get("description", f"Job listing for {job_data.get('title', '')} at {company['name']}."),
+                                posted_date=job_data.get("posted_date", "Unknown"),
+                                raw_data={
+                                    "origin": "company_website",
+                                    "company_url": company["url"],
+                                    "extraction_method": "gemini"
+                                }
+                            ))
+                        except Exception as e:
+                            logger.warning(f"Error processing extracted job: {str(e)}")
+                            continue
+                    
+                        if jobs:
+                            logger.info(f"Found {len(jobs)} matching jobs using Gemini at {company['name']}")
+                            return jobs
+                        else:
+                            logger.warning(f"No jobs found via Gemini, trying traditional scraping for {company['name']}")
                 else:
-                    # Use the entire response as potential JSON
-                    json_str = raw_text
-            
-            # Parse the extracted JSON
-            extracted_jobs = json.loads(json_str)
-            logger.warning(f"Gemini extracted {len(extracted_jobs)} jobs from {company['name']}")
-            
-            # Process extracted jobs
-            jobs = []
-            for job_data in extracted_jobs:
-                try:
-                    # Make URL absolute if it's relative
-                    job_url = job_data.get("url", "")
-                    if job_url and not job_url.startswith("http"):
-                        continue
-                                        
-                    jobs.append(RawJobData(
-                        title=job_data.get("title", ""),
-                        company=company["name"],
-                        url=job_url,
-                        source=company["name"],
-                        location=job_data.get("location", "Unknown"),
-                        job_type=job_data.get("job_type", ""),
-                        description=job_data.get("description", f"Job listing for {job_data.get('title', '')} at {company['name']}."),
-                        posted_date=job_data.get("posted_date", "Unknown"),
-                        raw_data={
-                            "origin": "company_website",
-                            "company_url": company["url"],
-                            "extraction_method": "gemini"
-                        }
-                    ))
-                except Exception as e:
-                    logger.warning(f"Error processing extracted job: {str(e)}")
-                    continue
-            
-                # if jobs:
-                #     logger.info(f"Found {len(jobs)} matching jobs using Gemini at {company['name']}")
-                #     return jobs
-                # else:
-                #     logger.warning(f"No jobs found via Gemini, trying traditional scraping for {company['name']}")
-            #     else:
-            #         logger.warning("No text in Gemini response, falling back to traditional scraping")
-            # except Exception as e:
-            #     logger.warning(f"Gemini extraction failed: {str(e)}")
-            #     logger.warning("Falling back to traditional scraping")
-            
-            # Traditional scraping approach (fallback)
-            # ... existing code ...
-            # [Rest of the traditional scraping code remains unchanged]
-            # ... existing code ...
-            
-        # except Exception as e:
-        #     logger.error(f"Error in _search_company_website for {company['name']}: {str(e)}")
-        #     return [] 
+                    logger.warning("No text in Gemini response, falling back to traditional scraping")
+            except Exception as e:
+                logger.warning(f"Gemini extraction failed: {str(e)}")
+        except Exception as e:
+            logger.error(f"Error in _search_company_website for {company['name']}: {str(e)}")
+            return [] 
