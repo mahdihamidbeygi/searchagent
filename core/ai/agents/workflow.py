@@ -33,7 +33,10 @@ class JobSearchWorkflow:
         
         # Build the workflow graph
         self.workflow = self._build_workflow()
-    
+
+        # Compile the graph with the custom checkpointer
+        self.app = self.workflow.compile()
+
     def _build_workflow(self) -> StateGraph:
         """
         Build the LangGraph workflow
@@ -98,7 +101,13 @@ class JobSearchWorkflow:
             }
         )
         graph.add_node("search_engine_agent_wait", lambda x: x)
-        
+
+        # # LangGraph will implicitly wait for all these predecessors to complete
+        # # before running the 'extractor' node.
+        # graph.add_edge("company_collector", "extractor")
+        # graph.add_edge("job_listing_collector", "extractor")
+        # graph.add_edge("news_collector", "extractor")
+        # graph.add_edge("search_engine_agent", "extractor")        
         # Extractor -> End
         graph.add_edge("extractor", END)
         
@@ -119,7 +128,7 @@ class JobSearchWorkflow:
             return "continue"
             
         # Check if company jobs need to be collected and have been
-        if search_state.company_name and not search_state.company_jobs:
+        if not search_state.company_jobs:
             return "continue"
             
         # Check if news jobs have been collected
@@ -129,32 +138,16 @@ class JobSearchWorkflow:
         # All collectors have run
         return "end"
     
-    async def run(self, search_query: str, location: str, company_name: Optional[str] = None) -> JobSearchState:
+    async def run(self, search_state:JobSearchState) -> JobSearchState:
         """
         Run the job search workflow.
         
         Args:
-            search_query: The job search query.
-            location: The job location.
-            company_name: Optional company name to search for.
-            
+            search_state (JobSearchState): The initial state for the workflow.
+        )
         Returns:
             The final state after the workflow completes.
         """
-        search_state = JobSearchState(
-            search_query=search_query,
-            location=location,
-            company_name=company_name,
-            job_types=[],
-            experience_levels=[],
-            preferred_companies=[],
-            skills=[],
-            excluded_skills=[],
-            company_jobs=[],
-            listing_jobs=[],
-            news_jobs=[],
-            search_engine_jobs=[]
-        )
-        
-        await self.workflow.invoke(search_state)
-        return search_state 
+
+        final_state = await self.app.ainvoke(search_state)
+        return final_state 

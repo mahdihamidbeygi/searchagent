@@ -9,7 +9,7 @@ from duckduckgo_search import DDGS
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from pydantic import BaseModel, Field
-from serpapi import GoogleSearch
+from serpapi.google_search import GoogleSearch
 
 
 class JobListing(BaseModel):

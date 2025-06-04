@@ -65,6 +65,7 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'search_agent.urls'
+ASGI_APPLICATION = 'search_agent.asgi.application'
 
 TEMPLATES = [
     {
@@ -221,3 +222,4 @@ GROK_API_KEY = os.getenv('GROK_API_KEY')
 BRAVE_WEBSEARCH_API_KEY = os.getenv('BRAVE_WEBSEARCH_API_KEY')
 NEWS_API_KEY = os.getenv('NEWS_API_KEY')
 GOOGLE_CSE_ID = os.getenv('GOOGLE_CSE_ID')
+MAIN_LLM_MODEL = os.getenv('MAIN_LLM_MODEL', 'gemini-2.5-flash-preview-04-17')

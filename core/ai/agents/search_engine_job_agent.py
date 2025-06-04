@@ -1,12 +1,15 @@
 import json
 import logging
-import requests
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
+import requests
+
 from core.ai.agents.base_agent import BaseAgent
 from core.ai.agents.state import JobSearchState, RawJobData
-from search_agent.settings import BRAVE_WEBSEARCH_API_KEY, GOOGLE_API_KEY, GOOGLE_CSE_ID
+from search_agent.settings import (BRAVE_WEBSEARCH_API_KEY, GOOGLE_API_KEY,
+                                   GOOGLE_CSE_ID)
+
 logger = logging.getLogger(__name__)
 
 class SearchEngineJobAgent(BaseAgent):
@@ -26,7 +29,7 @@ class SearchEngineJobAgent(BaseAgent):
             "DuckDuckGo": {}  # DuckDuckGo doesn't require an API key for basic usage
         }
     
-    def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    def process(self, current_state: JobSearchState) -> Dict[str, Any]:
         """
         Search for job listings using various search engines
         
@@ -37,37 +40,35 @@ class SearchEngineJobAgent(BaseAgent):
             Updated state with job listings from search engines
         """
         try:
-            search_state = JobSearchState(**state)
+            search_state = current_state # current_state is already a JobSearchState instance
             logger.info(f"Searching engines for job listings matching: {search_state.query}")
             
             # Collect jobs from each search engine
             collected_jobs = []
-            for engine in self.search_engines:
-                try:
-                    logger.info(f"Searching {engine['name']} for jobs")
-                    engine_jobs = self._search_engine(
-                        engine=engine, 
-                        query=search_state.query, 
-                        industry=search_state.industry
-                    )
-                    collected_jobs.extend(engine_jobs)
-                except Exception as e:
-                    logger.error(f"Error searching {engine['name']}: {str(e)}")
-                    # Add error to search_state's errors list
-                    search_state.errors = search_state.errors + [{
-                        'agent': self.__class__.__name__,
-                        'engine': engine['name'],
-                        'error': str(e)
-                    }]
+            errors = search_state.errors if search_state.errors else []
+            # for engine in self.search_engines:
+            #     try:
+            #         logger.info(f"Searching {engine['name']} for jobs")
+            #         engine_jobs = self._search_engine(
+            #             engine=engine, 
+            #             query=search_state.query, 
+            #             industry=search_state.industry
+            #         )
+            #         collected_jobs.extend(engine_jobs)
+            #     except Exception as e:
+            #         logger.error(f"Error searching {engine['name']}: {str(e)}")
+            #         errors.append({
+            #             'agent': self.__class__.__name__,
+            #             'engine': engine['name'],
+            #             'error': str(e)
+            #         })
             
-            # Update state with the collected jobs
-            search_state.search_engine_jobs = collected_jobs
             
             logger.info(f"Found {len(collected_jobs)} jobs from search engines")
-            return search_state.model_dump()
+            return {"search_engine_jobs": collected_jobs, "errors": errors}
             
         except Exception as e:
-            return self.handle_error(e, state)
+            return super().handle_error(e, current_state)
     
     def _search_engine(self, engine: Dict[str, str], query: str, industry: Optional[str] = None) -> List[RawJobData]:
         """

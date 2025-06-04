@@ -1,11 +1,12 @@
-import logging
-import random
 import json
-from datetime import datetime, timedelta
-from typing import Any, Dict, List
+import logging
 import os
-import requests
+import random
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any, Dict, List
+
+import requests
 
 from core.ai.agents.base_agent import BaseAgent
 from core.ai.agents.state import JobSearchState, RawJobData
@@ -81,7 +82,7 @@ class NewsAndAdsCollector(BaseAgent):
         logger.warning("No NEWS_API_KEY found in environment variables or config files")
         return ""
     
-    def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    def process(self, current_state: JobSearchState) -> Dict[str, Any]:
         """
         Extract job opportunities from news articles and advertisements
         
@@ -92,35 +93,33 @@ class NewsAndAdsCollector(BaseAgent):
             Updated state with job listings from news sources
         """
         try:
-            search_state = JobSearchState(**state)
-            logger.info(f"Processing news sources for query: {search_state.query}")
+            search_state = current_state # current_state is already a JobSearchState instance
+            # logger.info(f"Processing news sources for query: {search_state.query}")
             
             # Search each news source for job mentions
             collected_jobs = []
-            for source in self.news_sources:
-                try:
-                    logger.info(f"Searching {source['name']} for job mentions")
-                    raw_jobs = self._search_news_source(source, search_state.query)
-                    collected_jobs.extend(raw_jobs)
-                except Exception as e:
-                    logger.error(f"Error searching {source['name']}: {str(e)}")
-                    # Add to errors but continue with other sources
-                    if 'errors' not in state:
-                        state['errors'] = []
-                    state['errors'].append({
-                        'agent': self.__class__.__name__,
-                        'source': source['name'],
-                        'error': str(e)
-                    })
+            errors = search_state.errors if search_state.errors else []
+            # for source in self.news_sources:
+            #     try:
+            #         logger.info(f"Searching {source['name']} for job mentions")
+            #         raw_jobs = self._search_news_source(source, search_state.query)
+            #         collected_jobs.extend(raw_jobs)
+            #     except Exception as e:
+            #         logger.error(f"Error searching {source['name']}: {str(e)}")
+            #         # Add to errors but continue with other sources
+            #         # search_state.errors is guaranteed to be a list
+            #         errors.append({
+            #             'agent': self.__class__.__name__,
+            #             'source': source['name'],
+            #             'error': str(e)
+            #         })
             
-            # Set the news_jobs field directly
-            search_state.news_jobs = collected_jobs
             
-            logger.info(f"Found {len(search_state.news_jobs)} jobs from news sources")
-            return search_state.dict()
+            logger.info(f"Found {len(collected_jobs)} jobs from news sources")
+            return {"news_jobs": collected_jobs, "errors": errors}
             
         except Exception as e:
-            return self.handle_error(e, state)
+            return super().handle_error(e, current_state)
     
     def _search_news_source(self, source: Dict[str, str], query: str) -> List[RawJobData]:
         """

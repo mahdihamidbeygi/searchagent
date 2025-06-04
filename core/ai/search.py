@@ -11,6 +11,8 @@ from langchain_google_genai import (ChatGoogleGenerativeAI,
                                     GoogleGenerativeAIEmbeddings)
 from pydantic import BaseModel, ConfigDict
 
+from search_agent.settings import GOOGLE_API_KEY, MAIN_LLM_MODEL
+
 logger = logging.getLogger(__name__)
 
 class AISearch(BaseModel):
@@ -29,12 +31,12 @@ class AISearch(BaseModel):
             # Initialize embeddings and LLM
             self.embeddings = GoogleGenerativeAIEmbeddings(
                 model="models/embedding-001",
-                google_api_key=os.getenv('GOOGLE_API_KEY')
+                google_api_key=GOOGLE_API_KEY
             )
             
             self.llm = ChatGoogleGenerativeAI(
-                model="gemini-1.5-flash",
-                google_api_key=os.getenv('GOOGLE_API_KEY'),
+                model=MAIN_LLM_MODEL,
+                google_api_key=GOOGLE_API_KEY,
                 temperature=0.1,
                 max_output_tokens=1024,
                 convert_system_message_to_human=True

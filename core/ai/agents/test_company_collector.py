@@ -12,7 +12,7 @@ from core.ai.agents.state import JobSearchState, RawJobData
 class TestCompanyWebsiteCollector(unittest.TestCase):
     """Tests for the CompanyWebsiteCollector class"""
 
-    def setUp(self):
+    def __init__(self):
         """Set up test fixtures"""
         self.collector = CompanyWebsiteCollector()
         self.test_state = {
@@ -21,6 +21,7 @@ class TestCompanyWebsiteCollector(unittest.TestCase):
             "location": "remote",
             "company_jobs": []
         }
+        self.company = {"name": "Microsoft Corporation careers page", "url": "https://careers.microsoft.com/us/en/job-search"}
 
     # @patch('google.generativeai.GenerativeModel')
     # def test_search_companies_by_llm_success(self, mock_genai_model):
@@ -256,13 +257,10 @@ class TestCompanyWebsiteCollector(unittest.TestCase):
 
     def test_search_company_website_with_real_query(self):
         """Test the search_company_website method with a real query"""
-        self.test_state["query"] = "python developer"
-        self.test_state["industry"] = "technology"
-        self.test_state["location"] = "remote"
-        company = {"name": "Turing Enterprises Inc", "url": "https://www.turing.com/jobs"}
-        result = self.collector._search_company_website(company, self.test_state["query"])
+        result = self.collector._search_company_website(self.company, self.test_state["query"])
         print("result", result)
 
 
 if __name__ == "__main__":
-    unittest.main() 
+    # unittest.main() 
+    TestCompanyWebsiteCollector().test_search_company_website_with_real_query()

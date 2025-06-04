@@ -8,20 +8,18 @@ from typing import Any, Dict, List, Optional, Union
 
 import aiohttp
 from bs4 import BeautifulSoup
+from google import genai
+from google.genai import types
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from google import genai
-from google.genai import types
-
 
 from core.ai.agents.state import RawJobData
-from search_agent.settings import GOOGLE_API_KEY
-
+from search_agent.settings import GOOGLE_API_KEY, MAIN_LLM_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -329,7 +327,7 @@ class LinkedInJobScraper:
             
             # Generate content with Gemini
             response = self.llm_client.models.generate_content(
-                model='gemini-2.0-flash',
+                model=MAIN_LLM_MODEL,
                 contents=prompt,
                 config=self.config
             )            
@@ -651,4 +649,4 @@ class LinkedInJobScraper:
             except Exception as e:
                 logger.error(f"Error closing WebDriver: {str(e)}")
 
-from datetime import timedelta 
+from datetime import timedelta

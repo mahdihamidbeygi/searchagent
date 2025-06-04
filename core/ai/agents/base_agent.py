@@ -2,6 +2,8 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
 
+from core.ai.agents.state import JobSearchState  # Import JobSearchState
+
 logger = logging.getLogger(__name__)
 
 class BaseAgent(ABC):
@@ -12,19 +14,19 @@ class BaseAgent(ABC):
         logger.info(f"Initializing {self.__class__.__name__}")
     
     @abstractmethod
-    def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    def process(self, state: JobSearchState) -> Dict[str, Any]:
         """
         Process the current state and return an updated state
         
         Args:
-            state: The current state object containing job search parameters and results
+            state: The current JobSearchState object
             
         Returns:
-            Updated state object with new information from this agent
+            A dictionary representation of the updated state object
         """
         pass
     
-    def handle_error(self, error: Exception, state: Dict[str, Any]) -> Dict[str, Any]:
+    def handle_error(self, error: Exception, state: JobSearchState) -> Dict[str, Any]:
         """
         Handle any errors that occur during processing
         
@@ -33,15 +35,13 @@ class BaseAgent(ABC):
             state: The current state object
             
         Returns:
-            Updated state object with error information
+            A dictionary representation of the updated state object with error information
         """
-        logger.error(f"Error in {self.__class__.__name__}: {str(error)}")
-        if 'errors' not in state:
-            state['errors'] = []
-        
-        state['errors'].append({
+        logger.error(f"Error in {self.__class__.__name__} processing state for query '{state.query}': {str(error)}")
+        errors = state.errors if state.errors else []
+        # JobSearchState.errors has a default_factory=list, so it's always a list
+        errors.append({
             'agent': self.__class__.__name__,
             'error': str(error)
         })
-        
-        return state 
+        return {"errors": errors} 

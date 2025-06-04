@@ -14,7 +14,7 @@ class ExtractorAgent(BaseAgent):
     def __init__(self):
         super().__init__()
     
-    def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    def process(self, current_state: JobSearchState) -> Dict[str, Any]:
         """
         Process raw job data from collector agents into standardized job records
         
@@ -25,7 +25,7 @@ class ExtractorAgent(BaseAgent):
             Updated state with standardized job records
         """
         try:
-            search_state = JobSearchState(**state)
+            search_state = current_state # current_state is already a JobSearchState instance
             logger.info("Processing raw job data into standardized records")
             
             # Get all raw job data from collector agents
@@ -33,6 +33,7 @@ class ExtractorAgent(BaseAgent):
             
             # Process each raw job into a standardized record
             standardized_jobs = []
+            errors = search_state.errors if search_state.errors else []
             for raw_job in raw_jobs:
                 try:
                     # Convert the raw job data to a standardized record
@@ -40,9 +41,8 @@ class ExtractorAgent(BaseAgent):
                     standardized_jobs.append(standardized_job)
                 except Exception as e:
                     logger.error(f"Error processing job {raw_job.title}: {str(e)}")
-                    if 'errors' not in state:
-                        state['errors'] = []
-                    state['errors'].append({
+                    # search_state.errors is guaranteed to be a list
+                    errors.append({
                         'agent': self.__class__.__name__,
                         'job': raw_job.title,
                         'error': str(e)
@@ -50,15 +50,12 @@ class ExtractorAgent(BaseAgent):
             
             # Deduplicate job listings
             standardized_jobs = self._deduplicate_jobs(standardized_jobs)
-            
-            # Update the state with standardized job records
-            search_state.standardized_jobs = standardized_jobs
-            
+                        
             logger.info(f"Processed {len(standardized_jobs)} standardized job records")
-            return search_state.dict()
+            return {"standardized_jobs": standardized_jobs, "errors": errors}
             
         except Exception as e:
-            return self.handle_error(e, state)
+            return super().handle_error(e, current_state)
     
     def _process_job(self, raw_job: RawJobData) -> JobRecord:
         """

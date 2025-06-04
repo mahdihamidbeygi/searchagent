@@ -1,3 +1,7 @@
+import asyncio
+import logging
+
+from asgiref.sync import async_to_sync, sync_to_async
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
@@ -8,7 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from core.ai.agentic_job_search import AgenticJobSearch
-from core.ai.agentic_job_search_google_base import AgenticJobSearch
+# from core.ai.agentic_job_search_google_base import AgenticJobSearch
 from core.ai.job_search import JobSearchAgent
 from core.ai.search import AISearch
 from core.models import JobListing, SearchFeedback, SearchQuery, SearchResult
@@ -16,6 +20,7 @@ from core.models import JobListing, SearchFeedback, SearchQuery, SearchResult
 from .serializers import (SearchFeedbackSerializer, SearchQuerySerializer,
                           SearchRequestSerializer, SearchResultSerializer)
 
+logger = logging.Logger(__name__)
 
 def login_view(request):
     if request.method == 'POST':
@@ -24,7 +29,7 @@ def login_view(request):
         user = authenticate(request, username=username, password=password)
         if user is not None:
             login(request, user)
-            return redirect('test_search')
+            return redirect('job_search')
         else:
             return render(request, 'login.html', {'error': 'Invalid credentials'})
     return render(request, 'login.html')
@@ -36,87 +41,11 @@ def logout_view(request):
 
 
 @login_required
-def test_search(request):
-    return render(request, 'test_search.html')
-
-
-@login_required
 def job_search(request):
     return render(request, 'job_search.html')
 
 # Create your views here.
 
-class SearchViewSet(viewsets.ViewSet):
-    permission_classes = [IsAuthenticated]
-    search_agent = AgenticJobSearch()
-    
-    @action(detail=False, methods=['post'])
-    def search(self, request):
-        serializer = SearchRequestSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        query = serializer.validated_data['query']
-
-        # Process the query using AI
-        ai_response = self.search_agent.process_query(query)
-        
-        if 'error' in ai_response:
-            return Response(
-                {'error': ai_response['error']},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-        
-        # Save the search query
-        search_query = SearchQuery.objects.create(
-            user=request.user,
-            query=query
-        )
-        
-        # Save the results
-        for result in ai_response['results']:
-            SearchResult.objects.create(
-                query=search_query,
-                title=result['metadata'].get('title', 'Untitled'),
-                content=result['content'],
-                source=result['metadata'].get('source', ''),
-                relevance_score=result['relevance_score']
-            )
-        
-        # Return the response
-        return Response({
-            'query': search_query.query,
-            'answer': ai_response['answer'],
-            'results': SearchResultSerializer(
-                search_query.results.all(),
-                many=True
-            ).data
-        })
-    
-    @action(detail=False, methods=['get'])
-    def history(self, request):
-        queries = SearchQuery.objects.filter(user=request.user)
-        serializer = SearchQuerySerializer(queries, many=True)
-        return Response(serializer.data)
-    
-    @action(detail=True, methods=['post'])
-    def feedback(self, request, pk=None):
-        result = get_object_or_404(SearchResult, pk=pk)
-        serializer = SearchFeedbackSerializer(data=request.data)
-        
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        feedback = SearchFeedback.objects.create(
-            user=request.user,
-            result=result,
-            **serializer.validated_data
-        )
-        
-        return Response(
-            SearchFeedbackSerializer(feedback).data,
-            status=status.HTTP_201_CREATED
-        )
 
 # class JobSearchViewSet(viewsets.ViewSet):
 #     permission_classes = [IsAuthenticated]
@@ -200,9 +129,12 @@ class SearchViewSet(viewsets.ViewSet):
 class AgenticJobSearchViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
     agentic_job_search = AgenticJobSearch()
-    
+        
     @action(detail=False, methods=['post'])
     def search(self, request):
+        """
+        Synchronous wrapper around async job search
+        """
         serializer = SearchRequestSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -211,14 +143,28 @@ class AgenticJobSearchViewSet(viewsets.ViewSet):
         industry = request.data.get('industry', None)
         
         try:
-            # Search for jobs using the new agentic job search system
-            result = self.agentic_job_search.process_query(query, industry)
+            # Create an async function to perform the job search
+            async def perform_search():
+                # Search for jobs using the new agentic job search system
+                result = await self.agentic_job_search.process_query(query=query, industry=industry)
+                
+                # Save job listings to the database
+                await sync_to_async(self.agentic_job_search.save_job_listings, thread_sensitive=True)(
+                    request.user.id, 
+                    result.get('results', [])
+                )
+                
+                return result
             
-            # Save job listings to the database
-            job_listings = self.agentic_job_search.save_job_listings(
-                request.user.id, 
-                result.get('results', [])
-            )
+            # Execute the async function synchronously with a timeout
+            async def timed_search():
+                try:
+                    return await asyncio.wait_for(perform_search(), timeout=90.0)
+                except asyncio.TimeoutError:
+                    logger.error("Job search timed out after 90 seconds")
+                    raise Exception("Job search operation timed out")
+            
+            result = async_to_sync(timed_search)()
             
             # Return the response
             return Response({
@@ -230,6 +176,7 @@ class AgenticJobSearchViewSet(viewsets.ViewSet):
             })
             
         except Exception as e:
+            logger.error(f"Error in search action: {str(e)}")
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

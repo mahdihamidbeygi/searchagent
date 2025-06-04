@@ -19,13 +19,12 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
-from api.views import job_search, login_view, logout_view, test_search
+from api.views import job_search, login_view, logout_view
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
     path('login/', login_view, name='login'),
     path('logout/', logout_view, name='logout'),
-    path('', test_search, name='test_search'),
-    path('jobs/', job_search, name='job_search'),
+    path('', job_search, name='job_search'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

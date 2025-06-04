@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 from core.ai.agents.base_agent import BaseAgent
 from core.ai.agents.state import JobSearchState, RawJobData
-from search_agent.settings import GOOGLE_API_KEY, GROK_API_KEY
+from search_agent.settings import GOOGLE_API_KEY, MAIN_LLM_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -244,12 +244,13 @@ class CompanyWebsiteCollector(BaseAgent):
                 temperature=0.1,
                 top_p=0.95,
                 max_output_tokens=8192,
-                system_instruction=system_instruction
+                system_instruction=system_instruction,
+                request_options={"timeout": 10.0}
             )
             
             # Generate content with search grounding
             response = self.genai_client.models.generate_content(
-                model='gemini-2.0-flash',
+                model=MAIN_LLM_MODEL,
                 contents=prompt,
                 config=config_with_search,
             )
@@ -359,8 +360,7 @@ class CompanyWebsiteCollector(BaseAgent):
                 logger.warning("Using cached companies due to error")
                 return cached_companies
             return self.industry_companies[self.default_industry]
-
-    def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    def process(self, current_state: JobSearchState) -> Dict[str, Any]:
         """
         Search company websites for job listings based on the user's query and industry
         
@@ -371,45 +371,43 @@ class CompanyWebsiteCollector(BaseAgent):
             Updated state with company job listings
         """
         try:
-            search_state = JobSearchState(**state)
+            search_state = current_state # current_state is already a JobSearchState instance
             logger.info(f"Processing company websites for query: {search_state.query}")
             
-            # Determine which industry to use
-            industry = search_state.industry.lower() if search_state.industry else self.default_industry
+            # # Determine which industry to use
+            # industry = search_state.industry.lower() if search_state.industry else self.default_industry
             
-            # Get companies related to the industry and query using LLM with search grounding
-            companies = self._search_companies_by_llm(industry, search_state.query)
+            # # Get companies related to the industry and query using LLM with search grounding
+            # companies_to_search = self._search_companies_by_llm(industry, search_state.query)
             
-            if not companies:
-                logger.warning("No companies found, using default industry companies")
-                companies = self.industry_companies[self.default_industry]
+            # if not companies_to_search:
+            #     logger.warning("No companies found, using default industry companies")
+            #     companies_to_search = self.industry_companies[self.default_industry]
             
-            # Search each company website for job listings
+            # # Search each company website for job listings
             collected_jobs = []
-            for company in companies:
-                try:
-                    logger.info(f"Searching {company['name']} website for jobs")
-                    raw_jobs = self._search_company_website(company, search_state.query)
-                    collected_jobs.extend(raw_jobs)
-                except Exception as e:
-                    logger.error(f"Error searching {company['name']} website: {str(e)}")
-                    # Add to errors but continue with other companies
-                    if 'errors' not in state:
-                        state['errors'] = []
-                    state['errors'].append({
-                        'agent': self.__class__.__name__,
-                        'company': company['name'],
-                        'error': str(e)
-                    })
-            
-            # Set the company_jobs field directly
-            search_state.company_jobs = collected_jobs
-            
-            logger.info(f"Found {len(search_state.company_jobs)} jobs from company websites")
-            return search_state.model_dump()
+            errors = search_state.errors if search_state.errors else []
+            # logger.info(f"Companies: {companies_to_search}")
+            # for company in companies_to_search[:10]:
+            #     try:
+            #         logger.info(f"Searching {company['name']} website for jobs")
+            #         raw_jobs = self._search_company_website(company, search_state.query)
+            #         collected_jobs.extend(raw_jobs)
+            #     except Exception as e:
+            #         logger.error(f"Error searching {company['name']} website: {str(e)}")
+            #         # Add to errors but continue with other companies
+            #         # search_state.errors is guaranteed to be a list
+            #         errors.append({
+            #             'agent': self.__class__.__name__,
+            #             'company': company['name'],
+            #             'error': str(e)
+            #         })
+                        
+            logger.info(f"Found {len(collected_jobs)} jobs from company websites")
+            return {"company_jobs":collected_jobs, "errors": errors}
             
         except Exception as e:
-            return self.handle_error(e, state)
+            return super().handle_error(e, current_state) # Call parent's handle_error
     
     def _extract_text_from_containers(self, soup: BeautifulSoup) -> str:
         """
@@ -737,7 +735,7 @@ class CompanyWebsiteCollector(BaseAgent):
             
             # Generate content with Gemini
             response = self.genai_client.models.generate_content(
-                model='gemini-2.0-flash',
+                model=MAIN_LLM_MODEL,
                 contents=prompt,
                 config=config
             )

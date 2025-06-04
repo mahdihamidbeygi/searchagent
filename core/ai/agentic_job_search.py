@@ -2,6 +2,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
+from core.ai.agents.state import JobSearchState
 from core.ai.agents.workflow import JobSearchWorkflow
 from core.models import JobListing
 
@@ -18,10 +19,10 @@ class AgenticJobSearch:
     
     def __init__(self):
         """Initialize the agentic job search system"""
-        logger.info("Initializing AgenticJobSearchNew")
+        logger.info("Initializing AgenticJobSearch")
         self.workflow = JobSearchWorkflow()
     
-    def process_query(self, query: str, industry: Optional[str] = None) -> Dict[str, Any]:
+    async def process_query(self, **kwargs) -> Dict[str, Any]:
         """
         Process a job search query using the multi-agent workflow
         
@@ -33,46 +34,84 @@ class AgenticJobSearch:
             Dictionary with formatted job listings and errors (if any)
         """
         try:
-            logger.info(f"Processing job search query: {query}")
+            logger.info(f"Processing job search query: {kwargs}")
             
-            # Run the agent workflow
-            result = self.workflow.run(search_query=query, location=industry or "", company_name=None)
+            # Prepare JobSearchState object for the workflow
+            query_val = kwargs.get('query', '')
+            # 'industry' kwarg is the primary source for JobSearchState.industry
+            # 'location' kwarg might be used by some parts of the query formation,
+            # but JobSearchState itself uses 'industry'.
+            industry_val = kwargs.get('industry', None) 
             
+            # Create the initial JobSearchState object
+            # Other fields like company_jobs, listing_jobs, standardized_jobs, errors
+            # will use their default_factory from the JobSearchState model.
+            initial_job_search_state = JobSearchState(
+                query=query_val,
+                industry=industry_val,
+            )
+            
+            # Run the workflow with the JobSearchState object
+            # The workflow.run method expects a JobSearchState object.
+            final_job_search_state: JobSearchState = await self.workflow.run(initial_job_search_state)
+           
             # Format the result for the API response
-            formatted_result = self._format_result(result, query)
+            formatted_result = self._format_result(final_job_search_state, query_val)
             
             return formatted_result
             
         except Exception as e:
-            logger.error(f"Error in AgenticJobSearchNew.process_query: {str(e)}")
+            logger.error(f"Error in AgenticJobSearch.process_query: {str(e)}")
+            # Include more detailed error information
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            
             return {
-                "query": query,
-                "structured_query": {"job_title": query, "industry": industry},
+                "query": query_val,
+                "structured_query": {"job_title": query_val, "industry": industry_val},
                 "results": [],
-                "answer": "An error occurred while processing your job search query.",
-                "error": str(e)
+                "answer": "An error occurred while processing your job search query. Please try again.",
+                "errors": [f"Processing error: {str(e)}"]
             }
     
-    def _format_result(self, result: Dict[str, Any], query: str) -> Dict[str, Any]:
+    def _format_result(self, result_state: Any, query: str) -> Dict[str, Any]:
         """
         Format the workflow result for API response
         
         Args:
-            result: Raw result from the workflow
+            result_state: JobSearchState object from the workflow
             query: Original search query
             
         Returns:
             Formatted result for API response
         """
-        # Extract standardized jobs from the result
-        standardized_jobs = result.get("standardized_jobs", [])
+        # Handle case where result_state might be a dictionary or a JobSearchState object
+        if hasattr(result_state, 'standardized_jobs'):
+            standardized_jobs = result_state.standardized_jobs or []
+            industry = getattr(result_state, 'industry', None)
+            errors = result_state.errors or []
+        elif isinstance(result_state, dict):
+            standardized_jobs = result_state.get('standardized_jobs', [])
+            industry = result_state.get('industry')
+            errors = result_state.get('errors', [])
+        else:
+            logger.warning(f"Unexpected result_state type: {type(result_state)}")
+            standardized_jobs = []
+            industry = None
+            errors = ["Unexpected result format"]
         
         # Generate an answer based on the jobs found
         if not standardized_jobs:
             answer = "I couldn't find any job listings matching your search criteria."
         else:
             num_jobs = len(standardized_jobs)
-            top_companies = ", ".join(set([job.company for job in standardized_jobs[:3]]))
+            companies = []
+            for job in standardized_jobs[:3]:
+                if hasattr(job, 'company'):
+                    companies.append(job.company)
+                elif isinstance(job, dict):
+                    companies.append(job.get('company', 'Unknown'))
+            top_companies = ", ".join(set(companies))
             
             answer = (
                 f"I found {num_jobs} job listings matching your search for '{query}'. "
@@ -83,34 +122,63 @@ class AgenticJobSearch:
         # Format job listings for the API response
         formatted_results = []
         for job in standardized_jobs:
-            formatted_results.append({
-                "title": job.title,
-                "company": job.company,
-                "location": job.location,
-                "description": job.description,
-                "url": job.url,
-                "source": job.source,
-                "posted_date": job.posted_date,
-                "salary": job.salary,
-                "job_type": job.job_type,
-                "requirements": job.requirements,
-                "benefits": job.benefits,
-                "skills": job.skills,
-                "relevance_score": job.relevance_score,
-                "metadata": {
-                    "title": job.title,
-                    "source": job.source,
-                    "url": job.url
-                }
-            })
+            try:
+                if hasattr(job, '__dict__'):
+                    # Handle object-style job
+                    formatted_job = {
+                        "title": getattr(job, 'title', ''),
+                        "company": getattr(job, 'company', ''),
+                        "location": getattr(job, 'location', ''),
+                        "description": getattr(job, 'description', ''),
+                        "url": getattr(job, 'url', ''),
+                        "source": getattr(job, 'source', ''),
+                        "posted_date": getattr(job, 'posted_date', None),
+                        "salary": getattr(job, 'salary', ''),
+                        "job_type": getattr(job, 'job_type', ''),
+                        "requirements": getattr(job, 'requirements', []),
+                        "benefits": getattr(job, 'benefits', []),
+                        "skills": getattr(job, 'skills', []),
+                        "relevance_score": getattr(job, 'relevance_score', 0.0),
+                        "metadata": {
+                            "title": getattr(job, 'title', ''),
+                            "source": getattr(job, 'source', ''),
+                            "url": getattr(job, 'url', '')
+                        }
+                    }
+                else:
+                    # Handle dictionary-style job
+                    formatted_job = {
+                        "title": job.get('title', ''),
+                        "company": job.get('company', ''),
+                        "location": job.get('location', ''),
+                        "description": job.get('description', ''),
+                        "url": job.get('url', ''),
+                        "source": job.get('source', ''),
+                        "posted_date": job.get('posted_date', None),
+                        "salary": job.get('salary', ''),
+                        "job_type": job.get('job_type', ''),
+                        "requirements": job.get('requirements', []),
+                        "benefits": job.get('benefits', []),
+                        "skills": job.get('skills', []),
+                        "relevance_score": job.get('relevance_score', 0.0),
+                        "metadata": {
+                            "title": job.get('title', ''),
+                            "source": job.get('source', ''),
+                            "url": job.get('url', '')
+                        }
+                    }
+                formatted_results.append(formatted_job)
+            except Exception as e:
+                logger.error(f"Error formatting job: {str(e)}")
+                continue
         
         # Return the formatted response
         return {
             "query": query,
-            "structured_query": {"job_title": query, "industry": result.get("industry")},
+            "structured_query": {"job_title": query, "industry": industry},
             "results": formatted_results,
             "answer": answer,
-            "errors": result.get("errors", [])
+            "errors": errors if isinstance(errors, list) else []
         }
     
     def save_job_listings(self, user_id: int, results: List[Dict[str, Any]]) -> List[JobListing]:
@@ -143,15 +211,18 @@ class AgenticJobSearch:
                     requirements=result.get("requirements", []),
                     benefits=result.get("benefits", []),
                     skills=result.get("skills", []),
-                    relevance_score=result.get("relevance_score", 0.0)
+                    relevance_score=float(result.get("relevance_score", 0.0))
                 )
                 
                 # Save to the database
                 job.save()
                 saved_listings.append(job)
+                logger.info(f"Successfully saved job listing: {job.title} at {job.company}")
                 
             except Exception as e:
                 logger.error(f"Error saving job listing: {str(e)}")
+                logger.error(f"Problematic result: {result}")
                 # Continue with other listings
         
-        return saved_listings 
+        logger.info(f"Successfully saved {len(saved_listings)} out of {len(results)} job listings")
+        return saved_listings

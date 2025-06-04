@@ -1,6 +1,14 @@
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional  # Add Annotated
 
 from pydantic import BaseModel, Field
+
+
+# Define the reducer function for errors
+def _reduce_errors(left: List[Dict[str, Any]], right: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    # Ensure both are lists, even if one is None (though default_factory should prevent None)
+    left_val = left if left is not None else []
+    right_val = right if right is not None else []
+    return left_val + right_val
 
 
 class JobRecord(BaseModel):
@@ -48,7 +56,7 @@ class JobSearchState(BaseModel):
     standardized_jobs: List[JobRecord] = Field(default_factory=list)
     
     # Error tracking
-    errors: List[Dict[str, str]] = Field(default_factory=list)
+    errors: Annotated[List[Dict[str, Any]], _reduce_errors] = Field(default_factory=list)
     
     def get_all_raw_jobs(self) -> List[RawJobData]:
         """Get all raw job data from all collector agents"""
